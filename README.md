@@ -28,3 +28,6 @@ SÓ SE SOMA DBm com DB, NÃO PODE SOMAR DBm COM DBm
 
 (20/06)
 6 - Passo - Entrada de uma imagem
+
+(02/07)
+7 - Passo - Realizar diagrama de olho
