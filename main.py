@@ -1,4 +1,6 @@
 
+import math
+import random
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
@@ -23,10 +25,26 @@ def gerar_codigo_binario(sinal_quantizado, num_niveis):
         ) 
         for nivel in sinal_quantizado.flatten()
     ]
-    return codigo_binario
+    return codigo_binario, num_bits
+
+def codificar_nrz(sinal):
+    threshold = None
+    sinal_codificado = []
+    values = list(set(sinal))
+    values_int = sorted([int(v, 2) for v in values], reverse=True)
+    if len(values_int) % 2 == 0:
+        threshold = values_int[int(len(values_int)/2) - 1]
+    else:
+        threshold = values_int[int(math.floor(len(values_int)/2))]
+    for i in sinal:
+        if int(i, 2) > threshold:
+            sinal_codificado.append(1)
+        else:
+            sinal_codificado.append(-1)
+    return sinal_codificado
 
 # Função para plotar a transformada de Fourier da senoide
-def plot_fft_sen(ax, signal, sampling_rate, title, freq=None):
+def plot_fft_sen(ax, signal, sampling_rate, title):
     N = len(signal)
     T = 1.0 / sampling_rate
     yf = np.fft.fft(signal)
@@ -34,11 +52,6 @@ def plot_fft_sen(ax, signal, sampling_rate, title, freq=None):
     
     yf_shifted = np.fft.fftshift(yf)
     xf_shifted = np.fft.fftshift(xf)
-    
-    # idx = yf_shifted.argmax()
-    # mult = freq/xf_shifted[idx]
-    
-    # xf_shifted = xf_shifted * mult
     
     ax.plot(xf_shifted, 2.0/N * np.abs(yf_shifted))
     ax.grid()
@@ -79,92 +92,83 @@ def converte_img():
         
 def init_senoide():
     # Entrada de características do sinal
-    potencia = float(input('Digite a potência desejada: '))
+    potencia = float(input('Digite a potência desejada Db: '))
     amplitude = 10**(potencia / 10)
     frequencia = float(input('Digite a frequência desejada (hz): '))
     ciclos = float(input('Digite a quantidade de períodos a serem plotados: '))
-    duracao = float((1 / frequencia) * ciclos)
+    duracao = ciclos / frequencia
     amostragem = int(input('Digite a quantidade de amostras por período: '))
-    taxa_amostragem = int(amostragem * ciclos)
+    taxa_amostragem = round(amostragem * frequencia)
     num_niveis = int(input('Digite a quantidade de níveis desejada: '))
     if num_niveis <= 1:
         raise ValueError("O número de níveis de quantização deve ser maior que 1.")
 
-    tempo = np.linspace(0, duracao, taxa_amostragem, endpoint=True)
-    sinal_original = amplitude * np.cos(2 * np.pi * frequencia * tempo)
+    tempo = np.linspace(0, duracao, int(taxa_amostragem * duracao), endpoint=True)
+    sinal_original = amplitude * np.sin(2 * np.pi * frequencia * tempo)
 
     # Adicionar ruído branco ao sinal original
-    SNR = float(input('Digite a Relação Sinal Ruido (SNR): '))
+    SNR = float(input('Digite a Relação Sinal Ruido em Db (SNR): '))
     print("\n")
 
     # Quantizar o sinal original ruidoso
-    sinal_quantizado_sem_ruido, _ = quantizar_sinal(sinal_original, num_niveis)
-    # sinal_quantizado_com_ruido, _ = quantizar_sinal(sinal_original_ruidoso, num_niveis)
+    sinal_quantizado, _ = quantizar_sinal(sinal_original, num_niveis)
 
     # Gerar código binário a partir do sinal quantizado
-    codigo_binario_sem_ruido = gerar_codigo_binario(sinal_quantizado_sem_ruido, num_niveis)
-    # codigo_binario_com_ruido = gerar_codigo_binario(sinal_quantizado_com_ruido, num_niveis)
-    
+    codigo_binario, tamanho = gerar_codigo_binario(sinal_quantizado, num_niveis)
+    sinal_codificado = codificar_nrz(codigo_binario)
+        
     # Plotando sinal original com ruído e sinal original, sinal quantizado sem ruído, sinal quantizado com ruído, código binário sem ruído, código binário com ruído e suas transformadas de Fourier
     plt.figure(figsize=(16, 20))
 
-    # Sinal Original e Sinal Original com Ruído
-    ax1 = plt.subplot(8, 2, 3)
-    ax1.plot(tempo, sinal_original, label='Original', color='blue')
-    # ax1.plot(tempo, sinal_original_ruidoso, label='Original com Ruído', color='red', alpha=0.7)
+    # Sinal Original
+    ax1 = plt.subplot(3, 2, 1)
+    ax1.plot(tempo, sinal_original)
     ax1.set_xlabel('Tempo (s)')
     ax1.set_ylabel('Amplitude')
-    ax1.set_title('Sinais Original')
-    ax1.legend()
+    ax1.set_title('Sinal Original')
     ax1.set
     ax1.grid(True)
 
-    ax2 = plt.subplot(8, 2, 4)
-    plot_fft_sen(ax2, sinal_original, taxa_amostragem, 'Espectro do Sinal Original com Ruído', frequencia)
+    ax2 = plt.subplot(3, 2, 2)
+    plot_fft_sen(ax2, sinal_original, taxa_amostragem, 'Espectro do Sinal Original')
 
-    # Sinal Quantizado sem Ruído
-    ax3 = plt.subplot(8, 2, 7)
-    ax3.step(tempo, sinal_quantizado_sem_ruido, where='mid')
+    # Sinal Quantizado
+    ax3 = plt.subplot(3, 2, 3)
+    ax3.step(tempo, sinal_quantizado, where='mid')
     ax3.set_xlabel('Tempo (s)')
     ax3.set_ylabel('Nível de Quantização')
     ax3.set_title('Sinal Quantizado')
     ax3.grid(True)
 
-    ax4 = plt.subplot(8, 2, 8)
-    plot_fft_sen(ax4, sinal_quantizado_sem_ruido, taxa_amostragem, 'Espectro do Sinal Quantizado', frequencia)
+    ax4 = plt.subplot(3, 2, 4)
+    plot_fft_sen(ax4, sinal_quantizado, taxa_amostragem, 'Espectro do Sinal Quantizado')
 
-    # # Sinal Quantizado com Ruído
-    # ax5 = plt.subplot(8, 2, 11)
-    # ax5.step(tempo, sinal_quantizado_com_ruido, where='mid')
-    # ax5.set_xlabel('Tempo (s)')
-    # ax5.set_ylabel('Nível de Quantização')
-    # ax5.set_title('Sinal Quantizado com Ruído')
-    # ax5.grid(True)
-
-    # ax6 = plt.subplot(8, 2, 12)
-    # plot_fft_sen(ax6, sinal_quantizado_sem_ruido, taxa_amostragem, 'Espectro do Sinal Quantizado com Ruído', frequencia)
-
-    # Código Binário com Ruído
-    ax8 = plt.subplot(8, 2, 15)
-    plot_fft_sen(ax8, np.array([int(bit) for bit in codigo_binario_sem_ruido]), len(codigo_binario_sem_ruido), 'Espectro do Código Binário sem Ruído', frequencia)
-
-    # ax9 = plt.subplot(8, 2, 16)
-    # plot_fft_sen(ax9, np.array([int(bit) for bit in codigo_binario_com_ruido]), len(codigo_binario_com_ruido), 'Espectro do Código Binário com Ruído', frequencia)
-    # # plt.tight_layout()
+    # Código Binário sem Ruído
+    ax5 = plt.subplot(3, 2, 5)
+    ax5.set_xlabel("Tempo (s)")
+    ax5.set_ylabel("Amplitude")
+    ax5.set_title('Código Binário')
+    ax5.plot(tempo, sinal_codificado)
+    ax5.set
+    ax5.grid(True)
+    
+    # Código do sinal com ruído
+    ruido_db = potencia - SNR
+    ruido_linear = 10**(ruido_db/10)
+    ruido_array = np.random.normal(0, np.sqrt(ruido_linear), len(tempo))
+    codigo_com_ruido = [sinal_codificado[i] + ruido_array[i] for i in range(len(sinal_codificado))]
+    ax6 = plt.subplot(3, 2, 6)
+    ax6.set_xlabel("Tempo (s)")
+    ax6.set_ylabel("Amplitude")
+    ax6.set_title('Código Binário com Ruído')
+    ax6.plot(tempo, codigo_com_ruido)
+    ax6.set
+    ax6.grid(True)
+    
+    # plt.tight_layout()
+    plt.subplots_adjust(hspace=1.0)
     plt.show()
     
-    # Informações sobre os bits gerados sem ruído
-    print(f"Número de bits por amostra: {int(np.ceil(np.log2(num_niveis)))}")
-    print(f"Exemplo dos 10 primeiros valores do código binário:")
-    for i in range(min(10, len(codigo_binario_sem_ruido))):
-        print(f"Amostra {i}: Valor quantizado: {sinal_quantizado_sem_ruido.flatten()[i]} -> Código Binário: {codigo_binario_sem_ruido[i]}")
-    print("\n")
-    
-    # # Informações sobre os bits gerados com ruído
-    # print(f"Número de bits por amostra: {int(np.ceil(np.log2(num_niveis)))}")
-    # print(f"Exemplo dos 10 primeiros valores do código binário:")
-    # for i in range(min(10, len(codigo_binario_com_ruido))):
-    #     print(f"Amostra {i}: Valor quantizado: {sinal_quantizado_com_ruido.flatten()[i]} -> Código Binário: {codigo_binario_com_ruido[i]}")
 
 def init_imagem():
     img = converte_img()
