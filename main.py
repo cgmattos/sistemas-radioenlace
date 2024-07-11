@@ -1,6 +1,4 @@
-
 import math
-import random
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
@@ -11,11 +9,12 @@ from io import BytesIO
 def quantizar_sinal(sinal, num_niveis):
     valor_min = np.min(sinal)
     valor_max = np.max(sinal)
+    # Eixo Y do sinal quantizado
     niveis_quant = np.linspace(valor_min, valor_max, num_niveis)
     sinal_quantizado = np.round((sinal - valor_min) / (valor_max - valor_min) * (num_niveis - 1)) / (num_niveis - 1) * (valor_max - valor_min) + valor_min
     return sinal_quantizado, niveis_quant
 
-# Função para gerar código binário
+# Função para transformar a função quantizada, para uma representação em binários
 def gerar_codigo_binario(sinal_quantizado, num_niveis):
     num_bits = int(np.ceil(np.log2(num_niveis)))
     codigo_binario = [
@@ -27,20 +26,47 @@ def gerar_codigo_binario(sinal_quantizado, num_niveis):
     ]
     return codigo_binario, num_bits
 
-def codificar_nrz(sinal):
+def codificar_nrz(sinal, bin=False):
     threshold = None
     sinal_codificado = []
     values = list(set(sinal))
-    values_int = sorted([int(v, 2) for v in values], reverse=True)
-    if len(values_int) % 2 == 0:
-        threshold = values_int[int(len(values_int)/2) - 1]
-    else:
-        threshold = values_int[int(math.floor(len(values_int)/2))]
-    for i in sinal:
-        if int(i, 2) > threshold:
-            sinal_codificado.append(1)
+    pair = True
+    if bin:
+        values_int = sorted([int(v, 2) for v in values], reverse=True)
+        if len(values_int) % 2 == 0:
+            threshold = values_int[int(len(values_int)/2) - 1]
         else:
-            sinal_codificado.append(-1)
+            pair = False
+            threshold = values_int[int(math.floor(len(values_int)/2))]
+        for i in sinal:
+            if pair:
+                if int(i, 2) > threshold:
+                    sinal_codificado.append(1)
+                else:
+                    sinal_codificado.append(-1)
+            else:
+                if int(i, 2) >= threshold:
+                    sinal_codificado.append(1)
+                else:
+                    sinal_codificado.append(-1)
+    else:
+        values = sorted(values)
+        if len(values) % 2 == 0:
+            threshold = values[int(len(values)/2) - 1]
+        else:
+            pair = False
+            threshold = values[int(math.floor(len(values)/2))]
+        for i in sinal:
+            if pair:
+                if i > threshold:
+                    sinal_codificado.append(1)
+                else:
+                    sinal_codificado.append(-1)
+            else:
+                if i >= threshold:
+                    sinal_codificado.append(1)
+                else:
+                    sinal_codificado.append(-1)
     return sinal_codificado
 
 # Função para plotar a transformada de Fourier da senoide
@@ -95,7 +121,7 @@ def init_senoide():
     potencia = float(input('Digite a potência desejada Db: '))
     amplitude = 10**(potencia / 10)
     frequencia = float(input('Digite a frequência desejada (hz): '))
-    ciclos = float(input('Digite a quantidade de períodos a serem plotados: '))
+    ciclos = int(input('Digite a quantidade de períodos a serem plotados: '))
     duracao = ciclos / frequencia
     amostragem = int(input('Digite a quantidade de amostras por período: '))
     taxa_amostragem = round(amostragem * frequencia)
@@ -103,10 +129,13 @@ def init_senoide():
     if num_niveis <= 1:
         raise ValueError("O número de níveis de quantização deve ser maior que 1.")
 
+    # Cálculo do eixo x (tempo) nos gráficos. Foi adicionado meio período a mais para o cálculo do diagrama de olho
     tempo = np.linspace(0, duracao, int(taxa_amostragem * duracao), endpoint=True)
+    
+    # Cálculo do sinal original, a senóide no formato A*sen(pi*f*t)
     sinal_original = amplitude * np.sin(2 * np.pi * frequencia * tempo)
 
-    # Adicionar ruído branco ao sinal original
+    # Entrada da relação Sinal Ruído em DB
     SNR = float(input('Digite a Relação Sinal Ruido em Db (SNR): '))
     print("\n")
 
@@ -114,19 +143,19 @@ def init_senoide():
     sinal_quantizado, _ = quantizar_sinal(sinal_original, num_niveis)
 
     # Gerar código binário a partir do sinal quantizado
-    codigo_binario, tamanho = gerar_codigo_binario(sinal_quantizado, num_niveis)
-    sinal_codificado = codificar_nrz(codigo_binario)
+    # codigo_binario, _ = gerar_codigo_binario(sinal_quantizado, num_niveis)
+    sinal_codificado = codificar_nrz(sinal_quantizado, bin=False)
         
     # Plotando sinal original com ruído e sinal original, sinal quantizado sem ruído, sinal quantizado com ruído, código binário sem ruído, código binário com ruído e suas transformadas de Fourier
-    plt.figure(figsize=(16, 20))
+    fig = plt.figure(num="Trabalho de Sistemas de Radioenlace - Carlos e Alessandro", figsize=(16, 20))
 
-    # Sinal Original
+    # Plotando o Sinal Original, o tempo é um corte do array do tempo para pegar apenas de 0 até o número de períodos, ao invés de pegar de 0 até o número de períodos mais meio período
     ax1 = plt.subplot(3, 2, 1)
     ax1.plot(tempo, sinal_original)
     ax1.set_xlabel('Tempo (s)')
     ax1.set_ylabel('Amplitude')
     ax1.set_title('Sinal Original')
-    ax1.set
+    ax1.set()
     ax1.grid(True)
 
     ax2 = plt.subplot(3, 2, 2)
@@ -147,9 +176,9 @@ def init_senoide():
     ax5 = plt.subplot(3, 2, 5)
     ax5.set_xlabel("Tempo (s)")
     ax5.set_ylabel("Amplitude")
-    ax5.set_title('Código Binário')
+    ax5.set_title('Código Binário (NRZ)')
     ax5.plot(tempo, sinal_codificado)
-    ax5.set
+    ax5.set()
     ax5.grid(True)
     
     # Código do sinal com ruído
@@ -160,15 +189,75 @@ def init_senoide():
     ax6 = plt.subplot(3, 2, 6)
     ax6.set_xlabel("Tempo (s)")
     ax6.set_ylabel("Amplitude")
-    ax6.set_title('Código Binário com Ruído')
+    ax6.set_title('Código Binário (NRZ) com Ruído')
     ax6.plot(tempo, codigo_com_ruido)
-    ax6.set
+    ax6.set()
     ax6.grid(True)
     
     # plt.tight_layout()
     plt.subplots_adjust(hspace=1.0)
     plt.show()
     
+    if ciclos < 2 or amostragem < 4:
+        print("Não é possível calcular o diagrama de olho com um número de períodos menor que 2 ou amostras por período menor que 4")
+        exit(0)
+        
+    ## Contando número de bits de cada olho
+    janelas = []
+    janelas_tuplas = []
+    
+    for bit in range(0, len(sinal_codificado)):
+        if bit + 1 < len(sinal_codificado):
+            if sinal_codificado[bit] != sinal_codificado[bit + 1]:
+                janelas.append(bit + 1)
+        if bit == len(sinal_codificado) - 1:
+            janelas.append(bit)
+            
+    start = 0
+    for j in range(0, len(janelas)):
+        end = janelas[j]
+        
+        if janelas[j] < 2:
+            pass
+        
+        if janelas[j] + 1 <= len(sinal_codificado) - 1:
+            end = janelas[j] + 1
+        
+        if start - 1 >= 0:
+            start = start - 1
+        
+        janelas_tuplas.append((start, end))
+        start = janelas[j]
+
+    # Plotando diagrama de olho sem ruído            
+    plt.figure(num="Trabalho de Sistemas de Radioenlace - Carlos e Alessandro", figsize=(12, 8))
+    olho_sem_ruido = plt.subplot(3, 2, 3)
+    olho_sem_ruido.set_xlabel("Tempo (s)")
+    olho_sem_ruido.set_xlabel("Amplitude")
+    olho_sem_ruido.set_title("Diagrama de olho sem ruído")
+    for tp in janelas_tuplas:
+        array = sinal_codificado[tp[0]:tp[1]]
+        if tp[0] == 0 and (sinal_codificado[tp[0]] != sinal_codificado[tp[0] -1]):
+            array = np.insert(array, 0, sinal_codificado[tp[0] -1])
+        olho_sem_ruido.plot(array, color='blue', alpha=0.5)        
+    olho_sem_ruido.set()
+    olho_sem_ruido.grid(True)
+    
+    # Plotando diagrama de olho com ruído
+    olho_com_ruido = plt.subplot(3, 2, 4)
+    olho_com_ruido.set_xlabel("Tempo (s)")
+    olho_com_ruido.set_xlabel("Amplitude")
+    olho_com_ruido.set_title("Diagrama de olho com ruído")
+    olho_com_ruido.set()
+    for tp in janelas_tuplas:
+        array = codigo_com_ruido[tp[0]:tp[1]]
+        if tp[0] == 0 and (codigo_com_ruido[tp[0]] != codigo_com_ruido[tp[0] -1]):
+            array = np.insert(array, 0, codigo_com_ruido[tp[0] -1])
+        olho_com_ruido.plot(array, color='blue', alpha=0.5)       
+    olho_com_ruido.grid(True)
+    
+    plt.tight_layout()
+    plt.show()
 
 def init_imagem():
     img = converte_img()
@@ -214,7 +303,7 @@ def init_imagem():
             print(f"Amostra {i}: Valor quantizado: {img_quantizada.flatten()[i]} -> Código Binário: {codigo_binario[i]}")
     
 
-if __name__ == "__main__":
+if __name__ == "_main_":
     modo = int(input("Digite o tipo de entrada:\n\t1)Senoide\n\t2)Imagem\n"))
     match modo:
         case 1:
